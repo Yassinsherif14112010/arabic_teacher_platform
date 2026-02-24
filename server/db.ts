@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, students, InsertStudent, attendance, InsertAttendance, grades, InsertGrade, payments, InsertPayment, studyGroups, InsertStudyGroup } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,130 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ============ Students ============
+export async function createStudent(data: InsertStudent) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(students).values(data);
+  return result;
+}
+
+export async function getStudents() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(students).orderBy(students.name);
+}
+
+export async function getStudentById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(students).where(eq(students.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function getStudentByBarcode(barcodeNumber: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(students).where(eq(students.barcodeNumber, barcodeNumber)).limit(1);
+  return result[0] || null;
+}
+
+export async function updateStudent(id: number, data: Partial<InsertStudent>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.update(students).set(data).where(eq(students.id, id));
+}
+
+export async function deleteStudent(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.delete(students).where(eq(students.id, id));
+}
+
+// ============ Attendance ============
+export async function recordAttendance(data: InsertAttendance) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.insert(attendance).values(data);
+}
+
+export async function getTodayAttendance() {
+  const db = await getDb();
+  if (!db) return [];
+  const today = new Date().toISOString().split('T')[0];
+  return await db.select().from(attendance).where(eq(attendance.attendanceDate, new Date(today)));
+}
+
+export async function getAttendanceByDate(date: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(attendance).where(eq(attendance.attendanceDate, new Date(date)));
+}
+
+// ============ Grades ============
+export async function recordGrade(data: InsertGrade) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.insert(grades).values(data);
+}
+
+export async function getStudentGrades(studentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(grades).where(eq(grades.studentId, studentId)).orderBy(grades.examDate);
+}
+
+// ============ Payments ============
+export async function recordPayment(data: InsertPayment) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.insert(payments).values(data);
+}
+
+export async function getStudentPayments(studentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(payments).where(eq(payments.studentId, studentId)).orderBy(payments.paymentDate);
+}
+
+export async function getTotalPaymentsToday() {
+  const db = await getDb();
+  if (!db) return "0";
+  const today = new Date().toISOString().split('T')[0];
+  const result = await db.select().from(payments).where(eq(payments.paymentDate, new Date(today)));
+  const total = result.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);
+  return total.toString();
+}
+
+// ============ Study Groups ============
+export async function createStudyGroup(data: InsertStudyGroup) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.insert(studyGroups).values(data);
+}
+
+export async function getStudyGroups() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(studyGroups);
+}
+
+// ============ Dashboard Statistics ============
+export async function getDashboardStats() {
+  const db = await getDb();
+  if (!db) return { totalStudents: 0, todayAttendance: 0, todayPayments: "0" };
+  
+  const totalStudents = await db.select().from(students);
+  const today = new Date().toISOString().split('T')[0];
+  const todayDate = new Date(today);
+  const todayAttendanceRecords = await db.select().from(attendance).where(eq(attendance.attendanceDate, todayDate));
+  const todayPaymentsRecords = await db.select().from(payments).where(eq(payments.paymentDate, todayDate));
+  
+  const todayPaymentsTotal = todayPaymentsRecords.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);
+  
+  return {
+    totalStudents: totalStudents.length,
+    todayAttendance: todayAttendanceRecords.length,
+    todayPayments: todayPaymentsTotal.toString(),
+  };
+}
