@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   Users,
   Calendar,
@@ -12,15 +12,21 @@ import {
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 interface SidebarProps {
   userName?: string;
 }
 
 export default function Sidebar({ userName }: SidebarProps) {
-  const [isOpen, setIsOpen] = useState(true);
-  const [location] = useLocation();
-  const logout = trpc.auth.logout.useMutation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [location, navigate] = useLocation();
+  const logout = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      toast.success("تم تسجيل الخروج بنجاح");
+      window.location.href = "/";
+    },
+  });
 
   const isActive = (path: string) => location === path;
 
@@ -37,77 +43,89 @@ export default function Sidebar({ userName }: SidebarProps) {
       {/* Mobile Toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden bg-cyan-600 text-white p-2 rounded-lg"
+        className="fixed top-4 left-4 z-50 md:hidden bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-all duration-200"
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 right-0 h-screen bg-gradient-to-b from-slate-900 to-slate-800 border-l border-cyan-400/20 w-64 transform transition-transform duration-300 z-40 ${
+        className={`fixed top-0 right-0 h-screen bg-white border-l border-gray-200 shadow-lg w-64 transform transition-transform duration-300 z-40 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         } md:translate-x-0`}
       >
         {/* Logo Section */}
-        <div className="p-6 border-b border-cyan-400/20">
-          <Link href="/dashboard">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <img
-                src="/logo.jpg"
-                alt="محسن شاكر"
-                className="h-12 w-12 rounded-lg border border-cyan-400/30"
-              />
-              <div>
-                <h2 className="text-xl font-bold text-white">الشاعر</h2>
-                <p className="text-cyan-300 text-xs">منصة الطلاب</p>
-              </div>
+        <div className="p-6 border-b border-gray-200">
+          <button
+            onClick={() => {
+              navigate("/dashboard");
+              setIsOpen(false);
+            }}
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="/logo.jpg"
+              alt="محسن شاكر"
+              className="h-12 w-12 rounded-lg border border-blue-200"
+            />
+            <div className="text-right">
+              <h2 className="text-lg font-bold text-gray-900">الشاعر</h2>
+              <p className="text-blue-600 text-xs font-medium">منصة الطلاب</p>
             </div>
-          </Link>
+          </button>
         </div>
 
         {/* User Info */}
-        <div className="p-4 border-b border-cyan-400/20">
-          <p className="text-gray-300 text-sm font-medium truncate">{userName}</p>
-          <p className="text-gray-500 text-xs">مسؤول النظام</p>
+        <div className="p-4 border-b border-gray-200 bg-blue-50">
+          <p className="text-gray-600 text-sm">مرحباً بك</p>
+          <p className="font-semibold text-gray-900 truncate">{userName}</p>
         </div>
 
         {/* Menu Items */}
-        <nav className="p-4 space-y-2">
+        <nav className="p-4 space-y-2 flex-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
             return (
-              <Link key={item.path} href={item.path}>
-                <div
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 cursor-pointer ${
-                    active
-                      ? "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-400/20"
-                      : "text-gray-300 hover:bg-slate-700/50 hover:text-cyan-300"
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="font-medium">{item.label}</span>
-                </div>
-              </Link>
+              <button
+                key={item.path}
+                onClick={() => {
+                  navigate(item.path);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                  active
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <Icon size={20} />
+                <span className="font-medium text-right flex-1">{item.label}</span>
+              </button>
             );
           })}
         </nav>
 
         {/* Settings & Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-cyan-400/20 space-y-2">
-          <Link href="/settings">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-slate-700/50 hover:text-cyan-300 transition-all duration-200 cursor-pointer">
-              <Settings size={20} />
-              <span className="font-medium">الإعدادات</span>
-            </div>
-          </Link>
+        <div className="p-4 border-t border-gray-200 space-y-2">
+          <button
+            onClick={() => {
+              navigate("/settings");
+              setIsOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
+          >
+            <Settings size={20} />
+            <span className="font-medium text-right flex-1">الإعدادات</span>
+          </button>
 
           <Button
             onClick={() => logout.mutate()}
-            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+            disabled={logout.isPending}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
           >
             <LogOut size={18} />
-            تسجيل الخروج
+            {logout.isPending ? "جاري..." : "تسجيل الخروج"}
           </Button>
         </div>
       </div>
@@ -117,7 +135,7 @@ export default function Sidebar({ userName }: SidebarProps) {
         <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={() => setIsOpen(false)}
-        ></div>
+        />
       )}
     </>
   );
