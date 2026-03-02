@@ -34,8 +34,6 @@ export default function Sidebar({ userName }: SidebarProps) {
     { path: "/dashboard", label: "لوحة التحكم", icon: BarChart3 },
     { path: "/students", label: "إدارة الطلاب", icon: Users },
     { path: "/attendance", label: "تسجيل الحضور", icon: Calendar },
-    { path: "/grades", label: "الدرجات", icon: BarChart3 },
-    { path: "/payments", label: "المصروفات", icon: DollarSign },
   ];
 
   return (
