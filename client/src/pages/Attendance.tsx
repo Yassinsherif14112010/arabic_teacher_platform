@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar, Check, X } from "lucide-react";
+import { Calendar, Check, X, Clock, Barcode } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
@@ -35,7 +35,7 @@ export default function Attendance() {
       setBarcodeInput("");
       refetch();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error("حدث خطأ: " + error.message);
     },
   });
@@ -81,205 +81,223 @@ export default function Attendance() {
     });
   };
 
+  const getStudentName = (studentId: number) => {
+    return students.find((s: any) => s.id === studentId)?.name || "غير معروف";
+  };
+
+  const presentCount = todayAttendance.filter(
+    (a) => a.status === "present"
+  ).length;
+  const absentCount = todayAttendance.filter(
+    (a) => a.status === "absent"
+  ).length;
+  const lateCount = todayAttendance.filter(
+    (a) => a.status === "late"
+  ).length;
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-white text-xl">جاري التحميل...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600 text-xl">جاري التحميل...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="min-h-screen bg-gray-50">
       <Sidebar userName={user?.name || ""} />
 
       <div className="md:mr-64">
         {/* Top Navbar */}
-        <div className="bg-slate-800 border-b border-cyan-400/20 sticky top-0 z-30">
-          <div className="px-6 py-4 flex items-center justify-between">
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+          <div className="px-4 md:px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-orange-400" />
-              <h1 className="text-2xl font-bold text-white">تسجيل الحضور</h1>
+              <Calendar className="w-6 h-6 text-green-600" />
+              <h1 className="text-2xl font-bold text-gray-900">تسجيل الحضور والغياب</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-white border border-gray-300 text-gray-900"
+              />
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="p-6">
-          {/* Barcode Scanner */}
-          <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-orange-400/30 backdrop-blur-sm mb-6">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-white mb-4">
-                مسح الباركود
-              </h2>
-              <form onSubmit={handleBarcodeSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
-                    رقم الباركود أو الرقم التسلسلي
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="أدخل رقم الباركود"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    autoFocus
-                    className="bg-slate-700 border-orange-400/30 text-white placeholder-gray-400"
-                  />
-                </div>
+        <div className="p-4 md:p-6">
+          {/* Barcode Scanner Section */}
+          <Card className="bg-white border border-gray-200 shadow-sm mb-6">
+            <div className="p-4 md:p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Barcode className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-bold text-gray-900">ماسح الباركود</h2>
+              </div>
+              <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="أدخل رقم الباركود أو امسحه"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  autoFocus
+                  className="bg-white border border-gray-300 text-gray-900 flex-1"
+                />
                 <Button
                   type="submit"
                   disabled={recordAttendanceMutation.isPending}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2 rounded-lg transition-all duration-300"
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300"
                 >
-                  {recordAttendanceMutation.isPending
-                    ? "جاري التسجيل..."
-                    : "تسجيل الحضور"}
+                  {recordAttendanceMutation.isPending ? "جاري..." : "تسجيل"}
                 </Button>
               </form>
             </div>
           </Card>
 
-          {/* Date Selector */}
-          <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-cyan-400/30 backdrop-blur-sm mb-6">
-            <div className="p-6">
-              <label className="block text-gray-300 text-sm font-medium mb-2">
-                التاريخ
-              </label>
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-slate-700 border-cyan-400/30 text-white"
-              />
-            </div>
-          </Card>
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-6">
+            <Card className="bg-white border border-gray-200 shadow-sm">
+              <div className="p-4 md:p-6">
+                <p className="text-gray-600 text-sm font-medium">إجمالي الطلاب</p>
+                <h3 className="text-3xl font-bold text-gray-900 mt-2">{students.length}</h3>
+              </div>
+            </Card>
+            <Card className="bg-white border border-gray-200 shadow-sm">
+              <div className="p-4 md:p-6">
+                <div className="flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <p className="text-gray-600 text-sm font-medium">الحاضرون</p>
+                </div>
+                <h3 className="text-3xl font-bold text-green-600 mt-2">{presentCount}</h3>
+              </div>
+            </Card>
+            <Card className="bg-white border border-gray-200 shadow-sm">
+              <div className="p-4 md:p-6">
+                <div className="flex items-center gap-2">
+                  <X className="w-5 h-5 text-red-600" />
+                  <p className="text-gray-600 text-sm font-medium">الغائبون</p>
+                </div>
+                <h3 className="text-3xl font-bold text-red-600 mt-2">{absentCount}</h3>
+              </div>
+            </Card>
+            <Card className="bg-white border border-gray-200 shadow-sm">
+              <div className="p-4 md:p-6">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                  <p className="text-gray-600 text-sm font-medium">المتأخرون</p>
+                </div>
+                <h3 className="text-3xl font-bold text-yellow-600 mt-2">{lateCount}</h3>
+              </div>
+            </Card>
+          </div>
 
-          {/* Attendance List */}
-          <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-cyan-400/30 backdrop-blur-sm">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-white mb-4">
-                الحضور في {selectedDate}
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-700/50 border-b border-cyan-400/20">
-                      <th className="px-6 py-4 text-right text-gray-300 font-semibold">
-                        الرقم
-                      </th>
-                      <th className="px-6 py-4 text-right text-gray-300 font-semibold">
-                        اسم الطالب
-                      </th>
-                      <th className="px-6 py-4 text-right text-gray-300 font-semibold">
-                        الحالة
-                      </th>
-                      <th className="px-6 py-4 text-right text-gray-300 font-semibold">
-                        الإجراءات
-                      </th>
+          {/* Attendance Table */}
+          <Card className="bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
+                      الطالب
+                    </th>
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden md:table-cell">
+                      الحالة
+                    </th>
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
+                      الإجراءات
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 md:px-6 py-8 text-center text-gray-500">
+                        لا توجد طلاب مسجلون
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {students.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
-                          لا توجد طلاب مسجلين
-                        </td>
-                      </tr>
-                    ) : (
-                      students.map((student: any, index: number) => {
-                        const attendance = todayAttendance.find(
-                          (a) => a.studentId === student.id
-                        );
-                        return (
-                          <tr
-                            key={student.id}
-                            className="border-b border-cyan-400/10 hover:bg-slate-700/30 transition-colors duration-200"
-                          >
-                            <td className="px-6 py-4 text-gray-300">
-                              {index + 1}
-                            </td>
-                            <td className="px-6 py-4 text-white font-medium">
-                              {student.name}
-                            </td>
-                            <td className="px-6 py-4">
-                              {attendance ? (
-                                <span
-                                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                    attendance.status === "present"
-                                      ? "bg-green-500/20 text-green-400"
-                                      : attendance.status === "late"
-                                      ? "bg-yellow-500/20 text-yellow-400"
-                                      : "bg-red-500/20 text-red-400"
-                                  }`}
-                                >
-                                  {attendance.status === "present"
-                                    ? "حاضر"
-                                    : attendance.status === "late"
-                                    ? "متأخر"
-                                    : "غائب"}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500">لم يتم التسجيل</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={() =>
-                                    handleManualAttendance(student.id, "present")
-                                  }
-                                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded transition-all duration-200"
-                                  title="حاضر"
-                                >
-                                  <Check size={16} />
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    handleManualAttendance(student.id, "absent")
-                                  }
-                                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded transition-all duration-200"
-                                  title="غائب"
-                                >
-                                  <X size={16} />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary */}
-              <div className="mt-6 grid grid-cols-3 gap-4">
-                <Card className="bg-green-500/10 border border-green-400/30">
-                  <div className="p-4 text-center">
-                    <p className="text-green-400 text-sm">الحاضرون</p>
-                    <p className="text-2xl font-bold text-white">
-                      {todayAttendance.filter((a) => a.status === "present").length}
-                    </p>
-                  </div>
-                </Card>
-                <Card className="bg-yellow-500/10 border border-yellow-400/30">
-                  <div className="p-4 text-center">
-                    <p className="text-yellow-400 text-sm">المتأخرون</p>
-                    <p className="text-2xl font-bold text-white">
-                      {todayAttendance.filter((a) => a.status === "late").length}
-                    </p>
-                  </div>
-                </Card>
-                <Card className="bg-red-500/10 border border-red-400/30">
-                  <div className="p-4 text-center">
-                    <p className="text-red-400 text-sm">الغائبون</p>
-                    <p className="text-2xl font-bold text-white">
-                      {todayAttendance.filter((a) => a.status === "absent").length}
-                    </p>
-                  </div>
-                </Card>
-              </div>
+                  ) : (
+                    students.map((student: any) => {
+                      const attendance = todayAttendance.find(
+                        (a) => a.studentId === student.id
+                      );
+                      return (
+                        <tr
+                          key={student.id}
+                          className="border-b border-gray-200 hover:bg-gray-50 transition-colors duration-200"
+                        >
+                          <td className="px-4 md:px-6 py-4 text-gray-900 font-medium text-sm">
+                            {student.name}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 hidden md:table-cell">
+                            {attendance ? (
+                              <span
+                                className={`px-3 py-1 rounded-full text-sm font-bold ${
+                                  attendance.status === "present"
+                                    ? "bg-green-100 text-green-700"
+                                    : attendance.status === "absent"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-yellow-100 text-yellow-700"
+                                }`}
+                              >
+                                {attendance.status === "present"
+                                  ? "حاضر"
+                                  : attendance.status === "absent"
+                                  ? "غائب"
+                                  : "متأخر"}
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-700">
+                                لم يسجل
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 md:px-6 py-4">
+                            <div className="flex gap-2 flex-wrap">
+                              <Button
+                                onClick={() =>
+                                  handleManualAttendance(student.id, "present")
+                                }
+                                className={`px-3 py-1 rounded text-sm font-bold transition-all duration-200 ${
+                                  attendance?.status === "present"
+                                    ? "bg-green-600 text-white"
+                                    : "bg-green-100 text-green-700 hover:bg-green-200"
+                                }`}
+                              >
+                                <Check size={16} />
+                              </Button>
+                              <Button
+                                onClick={() =>
+                                  handleManualAttendance(student.id, "absent")
+                                }
+                                className={`px-3 py-1 rounded text-sm font-bold transition-all duration-200 ${
+                                  attendance?.status === "absent"
+                                    ? "bg-red-600 text-white"
+                                    : "bg-red-100 text-red-700 hover:bg-red-200"
+                                }`}
+                              >
+                                <X size={16} />
+                              </Button>
+                              <Button
+                                onClick={() =>
+                                  handleManualAttendance(student.id, "late")
+                                }
+                                className={`px-3 py-1 rounded text-sm font-bold transition-all duration-200 ${
+                                  attendance?.status === "late"
+                                    ? "bg-yellow-600 text-white"
+                                    : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                                }`}
+                              >
+                                <Clock size={16} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </Card>
         </div>

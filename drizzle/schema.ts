@@ -112,3 +112,43 @@ export const monthlyFees = mysqlTable("monthlyFees", {
 
 export type MonthlyFee = typeof monthlyFees.$inferSelect;
 export type InsertMonthlyFee = typeof monthlyFees.$inferInsert;
+// جدول المراحل الدراسية (الإعدادي، الثانوي)
+export const academicStages = mysqlTable("academicStages", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // الإعدادي، الثانوي
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AcademicStage = typeof academicStages.$inferSelect;
+export type InsertAcademicStage = typeof academicStages.$inferInsert;
+
+// جدول الفصول (الفصل الأول، الفصل الثاني)
+export const academicTerms = mysqlTable("academicTerms", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // الفصل الأول، الفصل الثاني
+  year: varchar("year", { length: 4 }).notNull(), // 2024، 2025
+  startDate: date("startDate"),
+  endDate: date("endDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AcademicTerm = typeof academicTerms.$inferSelect;
+export type InsertAcademicTerm = typeof academicTerms.$inferInsert;
+
+// جدول الشعب (الشعبة أ، الشعبة ب، إلخ)
+export const classrooms = mysqlTable("classrooms", {
+  id: int("id").autoincrement().primaryKey(),
+  stageId: int("stageId").notNull(), // المرحلة (الإعدادي/الثانوي)
+  termId: int("termId").notNull(), // الفصل الدراسي
+  name: varchar("name", { length: 100 }).notNull(), // الشعبة أ، الشعبة ب
+  grade: varchar("grade", { length: 50 }).notNull(), // الصف (أول إعدادي، ثاني ثانوي)
+  capacity: int("capacity"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Classroom = typeof classrooms.$inferSelect;
+export type InsertClassroom = typeof classrooms.$inferInsert;

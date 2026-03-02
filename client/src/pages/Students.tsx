@@ -225,6 +225,9 @@ export default function Students() {
                       البريد الإلكتروني
                     </th>
                     <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
+                      دفع المصروفات
+                    </th>
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
                       الإجراءات
                     </th>
                   </tr>
@@ -251,6 +254,24 @@ export default function Students() {
                         </td>
                         <td className="px-4 md:px-6 py-4 text-gray-600 text-sm hidden lg:table-cell">
                           {student.email || "-"}
+                        </td>
+                        <td className="px-4 md:px-6 py-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              defaultChecked={student.hasPaidFees}
+                              onChange={(e) => {
+                                // يمكن إضافة دالة لتحديث حالة الدفع
+                                toast.success(e.target.checked ? "✅ تم تسجيل الدفع" : "❌ تم إلغاء الدفع");
+                              }}
+                              className="w-5 h-5 text-green-600 rounded cursor-pointer"
+                            />
+                            <span className={`text-sm font-bold ${
+                              student.hasPaidFees ? "text-green-600" : "text-red-600"
+                            }`}>
+                              {student.hasPaidFees ? "مدفوع" : "لم يدفع"}
+                            </span>
+                          </label>
                         </td>
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex gap-2 flex-wrap">

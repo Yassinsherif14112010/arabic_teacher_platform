@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DollarSign, Plus, Trash2, TrendingUp } from "lucide-react";
+import { DollarSign, Plus, Trash2, TrendingUp, X, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
@@ -11,6 +11,16 @@ import { toast } from "sonner";
 interface PaymentForm {
   studentId: number;
   amount: number;
+  paymentDate: string;
+  paymentMethod: "cash" | "transfer" | "check";
+  month?: string;
+  notes?: string;
+}
+
+interface StudentPayment {
+  id: number;
+  studentId: number;
+  amount: string;
   paymentDate: string;
   paymentMethod: "cash" | "transfer" | "check";
   month?: string;
@@ -29,11 +39,13 @@ export default function Payments() {
   });
 
   const { data: students = [] } = trpc.students.list.useQuery();
-  const { data: payments = [], refetch } = trpc.students.getStudentPayments.useQuery({ studentId: 0 });
+  const { data: payments = [], refetch } = trpc.students.getStudentPayments.useQuery({ 
+    studentId: formData.studentId || 0 
+  });
 
   const createPaymentMutation = trpc.students.recordPayment.useMutation({
     onSuccess: () => {
-      toast.success("تم تسجيل الدفعة بنجاح!");
+      toast.success("✅ تم تسجيل الدفعة بنجاح!");
       setFormData({
         studentId: 0,
         amount: 0,
@@ -45,16 +57,17 @@ export default function Payments() {
       refetch();
     },
     onError: (error: any) => {
-      toast.error("حدث خطأ: " + error.message);
+      toast.error("❌ حدث خطأ: " + error.message);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.studentId || !formData.amount) {
-      toast.error("يرجى ملء جميع الحقول");
+      toast.error("يرجى ملء جميع الحقول المطلوبة");
       return;
     }
+
     createPaymentMutation.mutate({
       studentId: formData.studentId,
       amount: formData.amount,
@@ -69,21 +82,10 @@ export default function Payments() {
     return students.find((s: any) => s.id === studentId)?.name || "غير معروف";
   };
 
-  const getMethodLabel = (method: string) => {
-    switch (method) {
-      case "cash":
-        return "نقداً";
-      case "transfer":
-        return "تحويل بنكي";
-      case "check":
-        return "شيك";
-      default:
-        return method;
-    }
-  };
-
-  const totalCollected = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  const averagePayment = payments.length > 0 ? Math.round(totalCollected / payments.length) : 0;
+  const totalPayments = payments.reduce(
+    (sum, p: StudentPayment) => sum + parseFloat(p.amount),
+    0
+  );
 
   if (loading) {
     return (
@@ -103,14 +105,14 @@ export default function Payments() {
           <div className="px-4 md:px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <DollarSign className="w-6 h-6 text-orange-600" />
-              <h1 className="text-2xl font-bold text-gray-900">المصروفات والمدفوعات</h1>
+              <h1 className="text-2xl font-bold text-gray-900">إدارة المصروفات والدفعات</h1>
             </div>
             <Button
               onClick={() => setShowForm(!showForm)}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center gap-2 w-full md:w-auto"
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center gap-2"
             >
-              <Plus size={18} />
-              إضافة دفعة جديدة
+              <Plus size={20} />
+              تسجيل دفعة جديدة
             </Button>
           </div>
         </div>
@@ -121,21 +123,34 @@ export default function Payments() {
           {showForm && (
             <Card className="bg-white border border-gray-200 shadow-sm mb-6">
               <div className="p-4 md:p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">إضافة دفعة جديدة</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900">تسجيل دفعة جديدة</h2>
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Student Selection */}
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        اسم الطالب *
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
+                        الطالب *
                       </label>
                       <select
                         value={formData.studentId}
                         onChange={(e) =>
-                          setFormData({ ...formData, studentId: parseInt(e.target.value) })
+                          setFormData({
+                            ...formData,
+                            studentId: parseInt(e.target.value),
+                          })
                         }
-                        className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-2 rounded-lg"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-orange-500"
                       >
-                        <option value={0}>اختر طالب</option>
+                        <option value={0}>اختر الطالب</option>
                         {students.map((student: any) => (
                           <option key={student.id} value={student.id}>
                             {student.name}
@@ -143,84 +158,114 @@ export default function Payments() {
                         ))}
                       </select>
                     </div>
+
+                    {/* Amount */}
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        المبلغ (ج.م) *
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
+                        المبلغ (بالجنيه) *
                       </label>
                       <Input
                         type="number"
                         min="0"
-                        value={formData.amount}
+                        step="0.01"
+                        value={formData.amount || ""}
                         onChange={(e) =>
-                          setFormData({ ...formData, amount: parseFloat(e.target.value) })
+                          setFormData({
+                            ...formData,
+                            amount: parseFloat(e.target.value) || 0,
+                          })
                         }
+                        placeholder="أدخل المبلغ"
                         className="bg-white border border-gray-300 text-gray-900"
                       />
                     </div>
+
+                    {/* Payment Date */}
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        طريقة الدفع *
-                      </label>
-                      <select
-                        value={formData.paymentMethod}
-                        onChange={(e) =>
-                          setFormData({ ...formData, paymentMethod: e.target.value as any })
-                        }
-                        className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-2 rounded-lg"
-                      >
-                        <option value="cash">نقداً</option>
-                        <option value="transfer">تحويل بنكي</option>
-                        <option value="check">شيك</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
                         تاريخ الدفع *
                       </label>
                       <Input
                         type="date"
                         value={formData.paymentDate}
                         onChange={(e) =>
-                          setFormData({ ...formData, paymentDate: e.target.value })
+                          setFormData({
+                            ...formData,
+                            paymentDate: e.target.value,
+                          })
                         }
                         className="bg-white border border-gray-300 text-gray-900"
                       />
                     </div>
+
+                    {/* Payment Method */}
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
+                        طريقة الدفع *
+                      </label>
+                      <select
+                        value={formData.paymentMethod}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            paymentMethod: e.target.value as "cash" | "transfer" | "check",
+                          })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-orange-500"
+                      >
+                        <option value="cash">نقداً</option>
+                        <option value="transfer">تحويل بنكي</option>
+                        <option value="check">شيك</option>
+                      </select>
+                    </div>
+
+                    {/* Month */}
+                    <div>
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
                         الشهر
                       </label>
                       <Input
                         type="month"
-                        value={formData.month}
+                        value={formData.month || ""}
                         onChange={(e) =>
-                          setFormData({ ...formData, month: e.target.value })
+                          setFormData({
+                            ...formData,
+                            month: e.target.value,
+                          })
                         }
                         className="bg-white border border-gray-300 text-gray-900"
                       />
                     </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
+
+                    {/* Notes */}
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 font-bold text-sm mb-2">
                         ملاحظات
                       </label>
-                      <Input
-                        type="text"
-                        placeholder="ملاحظات إضافية"
-                        value={formData.notes}
+                      <textarea
+                        value={formData.notes || ""}
                         onChange={(e) =>
-                          setFormData({ ...formData, notes: e.target.value })
+                          setFormData({
+                            ...formData,
+                            notes: e.target.value,
+                          })
                         }
-                        className="bg-white border border-gray-300 text-gray-900"
+                        placeholder="أضف ملاحظات إضافية (اختياري)"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:border-orange-500 resize-none"
+                        rows={3}
                       />
                     </div>
                   </div>
-                  <div className="flex gap-2">
+
+                  {/* Submit Button */}
+                  <div className="flex gap-2 pt-4">
                     <Button
                       type="submit"
                       disabled={createPaymentMutation.isPending}
-                      className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300"
+                      className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300 flex items-center gap-2"
                     >
-                      {createPaymentMutation.isPending ? "جاري الحفظ..." : "حفظ الدفعة"}
+                      <Check size={18} />
+                      {createPaymentMutation.isPending ? "جاري..." : "تسجيل الدفعة"}
                     </Button>
                     <Button
                       type="button"
@@ -235,24 +280,34 @@ export default function Payments() {
             </Card>
           )}
 
-          {/* Stats Cards */}
+          {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
             <Card className="bg-white border border-gray-200 shadow-sm">
-              <div className="p-6">
-                <p className="text-gray-600 text-sm font-medium">إجمالي الدفعات</p>
-                <h3 className="text-3xl font-bold text-gray-900 mt-2">{payments.length}</h3>
+              <div className="p-4 md:p-6">
+                <p className="text-gray-600 text-sm font-medium">إجمالي الطلاب</p>
+                <h3 className="text-3xl font-bold text-gray-900 mt-2">{students.length}</h3>
               </div>
             </Card>
             <Card className="bg-white border border-gray-200 shadow-sm">
-              <div className="p-6">
-                <p className="text-gray-600 text-sm font-medium">المبلغ المتحصل</p>
-                <h3 className="text-3xl font-bold text-green-600 mt-2">{totalCollected} ج.م</h3>
+              <div className="p-4 md:p-6">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-orange-600" />
+                  <p className="text-gray-600 text-sm font-medium">إجمالي الدفعات</p>
+                </div>
+                <h3 className="text-3xl font-bold text-orange-600 mt-2">
+                  {payments.length}
+                </h3>
               </div>
             </Card>
             <Card className="bg-white border border-gray-200 shadow-sm">
-              <div className="p-6">
-                <p className="text-gray-600 text-sm font-medium">متوسط الدفعة</p>
-                <h3 className="text-3xl font-bold text-blue-600 mt-2">{averagePayment} ج.م</h3>
+              <div className="p-4 md:p-6">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-green-600" />
+                  <p className="text-gray-600 text-sm font-medium">إجمالي المبلغ</p>
+                </div>
+                <h3 className="text-3xl font-bold text-green-600 mt-2">
+                  {totalPayments.toFixed(2)} ج.م
+                </h3>
               </div>
             </Card>
           </div>
@@ -269,14 +324,14 @@ export default function Payments() {
                     <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden md:table-cell">
                       المبلغ
                     </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden lg:table-cell">
-                      الطريقة
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden lg:table-cell">
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden md:table-cell">
                       التاريخ
                     </th>
+                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden md:table-cell">
+                      الطريقة
+                    </th>
                     <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
-                      الإجراءات
+                      الملاحظات
                     </th>
                   </tr>
                 </thead>
@@ -288,7 +343,7 @@ export default function Payments() {
                       </td>
                     </tr>
                   ) : (
-                    payments.map((payment: any) => (
+                    payments.map((payment: StudentPayment) => (
                       <tr
                         key={payment.id}
                         className="border-b border-gray-200 hover:bg-gray-50 transition-colors duration-200"
@@ -296,22 +351,31 @@ export default function Payments() {
                         <td className="px-4 md:px-6 py-4 text-gray-900 font-medium text-sm">
                           {getStudentName(payment.studentId)}
                         </td>
-                        <td className="px-4 md:px-6 py-4 text-gray-600 text-sm hidden md:table-cell">
-                          <span className="font-bold text-green-600">{payment.amount} ج.م</span>
+                        <td className="px-4 md:px-6 py-4 hidden md:table-cell text-gray-900 font-bold text-sm">
+                          {parseFloat(payment.amount).toFixed(2)} ج.م
                         </td>
-                        <td className="px-4 md:px-6 py-4 text-gray-600 text-sm hidden lg:table-cell">
-                          {getMethodLabel(payment.paymentMethod)}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 text-gray-600 text-sm hidden lg:table-cell">
+                        <td className="px-4 md:px-6 py-4 hidden md:table-cell text-gray-600 text-sm">
                           {new Date(payment.paymentDate).toLocaleDateString("ar-EG")}
                         </td>
-                        <td className="px-4 md:px-6 py-4">
-                          <Button
-                            className="bg-red-600 hover:bg-red-700 text-white p-2 rounded transition-all duration-200"
-                            disabled
+                        <td className="px-4 md:px-6 py-4 hidden md:table-cell">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              payment.paymentMethod === "cash"
+                                ? "bg-green-100 text-green-700"
+                                : payment.paymentMethod === "transfer"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
                           >
-                            <Trash2 size={16} />
-                          </Button>
+                            {payment.paymentMethod === "cash"
+                              ? "نقداً"
+                              : payment.paymentMethod === "transfer"
+                              ? "تحويل"
+                              : "شيك"}
+                          </span>
+                        </td>
+                        <td className="px-4 md:px-6 py-4 text-gray-600 text-sm">
+                          {payment.notes || "-"}
                         </td>
                       </tr>
                     ))
