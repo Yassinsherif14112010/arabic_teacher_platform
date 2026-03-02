@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { sql } from "drizzle-orm";
 import { InsertUser, users, students, InsertStudent, attendance, InsertAttendance, grades, InsertGrade, payments, InsertPayment, studyGroups, InsertStudyGroup } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -140,7 +141,12 @@ export async function getTodayAttendance() {
   const db = await getDb();
   if (!db) return [];
   const today = new Date().toISOString().split('T')[0];
-  return await db.select().from(attendance).where(eq(attendance.attendanceDate, new Date(today)));
+  const todayDate = new Date(today);
+  // جلب سجلات الحضور لليوم الحالي
+  const result = await db.select().from(attendance).where(
+    sql`DATE(${attendance.attendanceDate}) = ${today}`
+  );
+  return result || [];
 }
 
 export async function getAttendanceByDate(date: string) {
