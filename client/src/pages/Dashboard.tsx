@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Calendar, TrendingUp } from "lucide-react";
+import { Users, Calendar, TrendingUp, DollarSign } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
