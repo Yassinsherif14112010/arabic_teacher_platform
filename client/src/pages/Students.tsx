@@ -51,13 +51,22 @@ export default function Students() {
     },
   });
 
+  const updatePaymentMutation = trpc.students.updatePayment.useMutation({
+    onSuccess: () => {
+      refetch();
+    },
+    onError: (error) => {
+      toast.error("حدث خطأ: " + error.message);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) {
       toast.error("يرجى إدخال اسم الطالب");
       return;
     }
-    const barcodeNumber = "STU" + Date.now() + Math.random().toString(36).substr(2, 9).toUpperCase();
+    const barcodeNumber = String(Math.floor(Math.random() * 9000) + 1000); // 4 أرقام من 1000 إلى 9999
     createStudentMutation.mutate({
       ...formData,
       barcodeNumber,
@@ -259,9 +268,12 @@ export default function Students() {
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              defaultChecked={student.hasPaidFees}
+                              checked={student.hasPaidFees}
                               onChange={(e) => {
-                                // يمكن إضافة دالة لتحديث حالة الدفع
+                                updatePaymentMutation.mutate({
+                                  studentId: student.id,
+                                  hasPaidFees: e.target.checked,
+                                });
                                 toast.success(e.target.checked ? "✅ تم تسجيل الدفع" : "❌ تم إلغاء الدفع");
                               }}
                               className="w-5 h-5 text-green-600 rounded cursor-pointer"
@@ -269,7 +281,7 @@ export default function Students() {
                             <span className={`text-sm font-bold ${
                               student.hasPaidFees ? "text-green-600" : "text-red-600"
                             }`}>
-                              {student.hasPaidFees ? "مدفوع" : "لم يدفع"}
+                              {student.hasPaidFees ? "دفع" : "لم يدفع"}
                             </span>
                           </label>
                         </td>

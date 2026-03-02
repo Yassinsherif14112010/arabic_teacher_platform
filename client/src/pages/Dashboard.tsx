@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Calendar, DollarSign, BarChart3, TrendingUp } from "lucide-react";
+import { Users, Calendar, TrendingUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -150,21 +150,7 @@ export default function Dashboard() {
               تسجيل الحضور
             </Button>
 
-            <Button
-              onClick={() => navigate("/grades")}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <BarChart3 className="w-5 h-5" />
-              الدرجات
-            </Button>
 
-            <Button
-              onClick={() => navigate("/payments")}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <DollarSign className="w-5 h-5" />
-              المصروفات
-            </Button>
           </div>
 
           {/* Welcome Card */}

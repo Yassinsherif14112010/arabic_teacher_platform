@@ -83,6 +83,17 @@ export const studentsRouter = router({
       return await deleteStudent(input.id);
     }),
 
+  updatePayment: protectedProcedure
+    .input(
+      z.object({
+        studentId: z.number(),
+        hasPaidFees: z.boolean(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await updateStudent(input.studentId, { hasPaidFees: input.hasPaidFees });
+    }),
+
   // Attendance
   recordAttendance: protectedProcedure
     .input(

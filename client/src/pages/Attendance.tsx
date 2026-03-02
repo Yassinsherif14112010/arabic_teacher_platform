@@ -33,6 +33,7 @@ export default function Attendance() {
     onSuccess: () => {
       toast.success("تم تسجيل الحضور بنجاح!");
       setBarcodeInput("");
+      // إعادة جلب البيانات وتحديث الإحصائيات
       refetch();
     },
     onError: (error: any) => {
@@ -85,6 +86,7 @@ export default function Attendance() {
     return students.find((s: any) => s.id === studentId)?.name || "غير معروف";
   };
 
+  // حساب الإحصائيات - يتم تحديثها عند كل تغيير في todayAttendance
   const presentCount = todayAttendance.filter(
     (a) => a.status === "present"
   ).length;
@@ -94,6 +96,11 @@ export default function Attendance() {
   const lateCount = todayAttendance.filter(
     (a) => a.status === "late"
   ).length;
+  
+  // إعادة حساب الإحصائيات عند تحديث الحضور
+  useEffect(() => {
+    // سيتم تحديث الإحصائيات تلقائياً عند تغيير todayAttendance
+  }, [todayAttendance]);
 
   if (loading) {
     return (

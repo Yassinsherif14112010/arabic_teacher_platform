@@ -2,12 +2,11 @@ import { useLocation } from "wouter";
 import {
   Users,
   Calendar,
-  DollarSign,
   BarChart3,
-  Settings,
-  LogOut,
   Menu,
   X,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,13 +19,8 @@ interface SidebarProps {
 
 export default function Sidebar({ userName }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const [location, navigate] = useLocation();
-  const logout = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      toast.success("تم تسجيل الخروج بنجاح");
-      window.location.href = "/";
-    },
-  });
 
   const isActive = (path: string) => location === path;
 
@@ -104,27 +98,15 @@ export default function Sidebar({ userName }: SidebarProps) {
           })}
         </nav>
 
-        {/* Settings & Logout */}
-        <div className="p-4 border-t border-gray-200 space-y-2">
+        {/* Theme Toggle */}
+        <div className="p-4 border-t border-gray-200">
           <button
-            onClick={() => {
-              navigate("/settings");
-              setIsOpen(false);
-            }}
+            onClick={() => setIsDark(!isDark)}
             className="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
           >
-            <Settings size={20} />
-            <span className="font-medium text-right flex-1">الإعدادات</span>
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            <span className="font-medium text-right flex-1">{isDark ? "الوضع النهاري" : "الوضع الليلي"}</span>
           </button>
-
-          <Button
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
-          >
-            <LogOut size={18} />
-            {logout.isPending ? "جاري..." : "تسجيل الخروج"}
-          </Button>
         </div>
       </div>
 
