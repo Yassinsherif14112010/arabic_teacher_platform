@@ -1,96 +1,98 @@
-import { eq } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { sql } from "drizzle-orm";
-import { InsertUser, users, students, InsertStudent, attendance, InsertAttendance, grades, InsertGrade, payments, InsertPayment, studyGroups, InsertStudyGroup } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import mysql from "mysql2/promise";
+import { users, students, InsertStudent, attendance, InsertAttendance, grades, InsertGrade, payments, InsertPayment, studyGroups, InsertStudyGroup, feeSettings, InsertFeeSetting } from "../drizzle/schema";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+// ============ Database Initialization ============
+let dbInstance: any = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+  if (dbInstance) return dbInstance;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.warn("DATABASE_URL is not set");
+    return null;
   }
-  return _db;
-}
-
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
+    // استخدم createPool بدلاً من createConnection لتجنب سقوط الاتصال
+    const pool = mysql.createPool(connectionString);
+    dbInstance = drizzle(pool);
+    return dbInstance;
+  } catch (err) {
+    console.error("Failed to initialize database:", err);
+    return null;
   }
 }
 
-export async function getUserByOpenId(openId: string) {
+// ============ Users / Auth ============
+export async function getUserByUsername(username: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function createUser(data: { username: string; password: string; name: string; role: "teacher" | "assistant" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(users).values({ ...data, lastSignedIn: new Date() });
+}
+
+export async function updateUserLastSignIn(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, id));
+}
+
+export async function updateStudent(id: number, data: Partial<InsertStudent>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // إذا تم تفعيل دفع المصاريف، سجل دفعة تلقائية في جدول payments
+  if (data.feePaid === true) {
+    const studentResult = await db.select().from(students).where(eq(students.id, id)).limit(1);
+    const student = studentResult[0];
+    if (student && !student.feePaid) {
+      const currentYear = getCurrentAcademicYear();
+      const feeRow = await db.select().from(feeSettings)
+        .where(and(eq(feeSettings.academicYear, currentYear), eq(feeSettings.grade, student.grade || "")))
+        .limit(1);
+      const amount = feeRow[0]?.feeAmount ?? "0";
+      const today = new Date().toISOString().split("T")[0];
+      await db.insert(payments).values({
+        studentId: id,
+        amount: amount.toString(),
+        paymentDate: new Date(today),
+        paymentMethod: "cash",
+        month: today.slice(0, 7),
+        notes: `مصاريف السنة الدراسية ${currentYear}`,
+      });
+    }
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  await db.update(students).set(data).where(eq(students.id, id));
 }
 
 // ============ Students ============
+export async function getDashboardStats() {
+  const db = await getDb();
+  if (!db) return { totalStudents: 0, activeStudents: 0, presentToday: 0 };
+
+  const totalRes = await db.select({ count: sql<number>`count(*)` }).from(students);
+  const activeRes = await db.select({ count: sql<number>`count(*)` }).from(students).where(eq(students.status, 'active'));
+
+  const today = new Date().toISOString().split('T')[0];
+  const presentRes = await db.select({ count: sql<number>`count(*)` })
+    .from(attendance)
+    .where(sql`DATE(attendanceDate) = ${today} AND status = 'present'`);
+
+  return {
+    totalStudents: Number(totalRes[0]?.count || 0),
+    activeStudents: Number(activeRes[0]?.count || 0),
+    presentToday: Number(presentRes[0]?.count || 0),
+  };
+}
+
 export async function createStudent(data: InsertStudent) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -101,124 +103,184 @@ export async function createStudent(data: InsertStudent) {
 export async function getStudents() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(students).orderBy(students.name);
+  return db.select().from(students);
+}
+
+export async function getAllStudents() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(students);
 }
 
 export async function getStudentById(id: number) {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) return undefined;
   const result = await db.select().from(students).where(eq(students.id, id)).limit(1);
-  return result[0] || null;
+  return result[0] ?? undefined;
 }
 
 export async function getStudentByBarcode(barcodeNumber: string) {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) return undefined;
   const result = await db.select().from(students).where(eq(students.barcodeNumber, barcodeNumber)).limit(1);
-  return result[0] || null;
+  return result[0] ?? undefined;
 }
 
-export async function updateStudent(id: number, data: Partial<InsertStudent>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return await db.update(students).set(data).where(eq(students.id, id));
-}
+
 
 export async function deleteStudent(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return await db.delete(students).where(eq(students.id, id));
+  await db.delete(students).where(eq(students.id, id));
 }
 
 // ============ Attendance ============
 export async function recordAttendance(data: InsertAttendance) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return await db.insert(attendance).values(data);
+  return db.insert(attendance).values(data);
 }
 
 export async function getTodayAttendance() {
   const db = await getDb();
   if (!db) return [];
   const today = new Date().toISOString().split('T')[0];
-  const todayDate = new Date(today);
-  // جلب سجلات الحضور لليوم الحالي
-  const result = await db.select().from(attendance).where(
-    sql`DATE(${attendance.attendanceDate}) = ${today}`
-  );
-  return result || [];
+  return db.select().from(attendance).where(sql`DATE(attendanceDate) = ${today}`);
 }
 
 export async function getAttendanceByDate(date: string) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(attendance).where(eq(attendance.attendanceDate, new Date(date)));
+  return db.select().from(attendance).where(sql`DATE(${attendance.attendanceDate}) = ${date}`);
 }
 
 // ============ Grades ============
 export async function recordGrade(data: InsertGrade) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return await db.insert(grades).values(data);
+  return db.insert(grades).values(data);
+}
+
+export async function addGrade(data: InsertGrade) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(grades).values(data);
 }
 
 export async function getStudentGrades(studentId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(grades).where(eq(grades.studentId, studentId)).orderBy(grades.examDate);
+  return db.select().from(grades).where(eq(grades.studentId, studentId));
+}
+
+export async function getGradesByStudent(studentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(grades).where(eq(grades.studentId, studentId));
+}
+
+export async function getAllGrades() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(grades);
 }
 
 // ============ Payments ============
 export async function recordPayment(data: InsertPayment) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return await db.insert(payments).values(data);
+  return db.insert(payments).values(data);
+}
+
+export async function addPayment(data: InsertPayment) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(payments).values(data);
 }
 
 export async function getStudentPayments(studentId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(payments).where(eq(payments.studentId, studentId)).orderBy(payments.paymentDate);
+  return db.select().from(payments).where(eq(payments.studentId, studentId));
 }
 
-export async function getTotalPaymentsToday() {
+export async function getPaymentsByStudent(studentId: number) {
   const db = await getDb();
-  if (!db) return "0";
-  const today = new Date().toISOString().split('T')[0];
-  const result = await db.select().from(payments).where(eq(payments.paymentDate, new Date(today)));
-  const total = result.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);
-  return total.toString();
+  if (!db) return [];
+  return db.select().from(payments).where(eq(payments.studentId, studentId));
+}
+
+export async function getAllPayments() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(payments);
 }
 
 // ============ Study Groups ============
 export async function createStudyGroup(data: InsertStudyGroup) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return await db.insert(studyGroups).values(data);
+  return db.insert(studyGroups).values(data);
 }
 
-export async function getStudyGroups() {
+export async function getAllStudyGroups() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(studyGroups);
+  return db.select().from(studyGroups);
 }
 
-// ============ Dashboard Statistics ============
-export async function getDashboardStats() {
+export async function getStudyGroupsByGrade(grade: string) {
   const db = await getDb();
-  if (!db) return { totalStudents: 0, todayAttendance: 0, todayPayments: "0" };
-  
-  const totalStudents = await db.select().from(students);
-  const today = new Date().toISOString().split('T')[0];
-  const todayDate = new Date(today);
-  const todayAttendanceRecords = await db.select().from(attendance).where(eq(attendance.attendanceDate, todayDate));
-  const todayPaymentsRecords = await db.select().from(payments).where(eq(payments.paymentDate, todayDate));
-  
-  const todayPaymentsTotal = todayPaymentsRecords.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);
-  
-  return {
-    totalStudents: totalStudents.length,
-    todayAttendance: todayAttendanceRecords.length,
-    todayPayments: todayPaymentsTotal.toString(),
-  };
+  if (!db) return [];
+  return db.select().from(studyGroups).where(eq(studyGroups.grade, grade));
+}
+
+export async function updateStudyGroup(id: number, data: Partial<InsertStudyGroup>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(studyGroups).set(data).where(eq(studyGroups.id, id));
+}
+
+export async function deleteStudyGroup(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(studyGroups).where(eq(studyGroups.id, id));
+}
+
+// Re-export drizzle instance getter from here if needed safely, or remove it entirely
+// export { getDb } from "./db";
+
+// ============ Fee Settings ============
+function getCurrentAcademicYear(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  // السنة الدراسية تبدأ في أكتوبر
+  if (month >= 10) return `${year}-${year + 1}`;
+  return `${year - 1}-${year}`;
+}
+
+export async function getAllFeeSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(feeSettings);
+}
+
+export async function upsertFeeSetting(data: { academicYear: string; grade: string; feeAmount: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(feeSettings)
+    .where(and(eq(feeSettings.academicYear, data.academicYear), eq(feeSettings.grade, data.grade)))
+    .limit(1);
+  if (existing[0]) {
+    await db.update(feeSettings).set({ feeAmount: data.feeAmount }).where(eq(feeSettings.id, existing[0].id));
+  } else {
+    await db.insert(feeSettings).values(data);
+  }
+}
+
+export async function deleteFeeSettingById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(feeSettings).where(eq(feeSettings.id, id));
 }

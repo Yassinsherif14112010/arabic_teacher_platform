@@ -18,7 +18,7 @@ export default function BarcodeDisplay({
   displayValue = true,
   className = "",
 }: BarcodeDisplayProps) {
-  const barcodeRef = useRef<SVGSVGElement>(null);
+  const barcodeRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     if (barcodeRef.current && value) {
@@ -39,7 +39,7 @@ export default function BarcodeDisplay({
 
   return (
     <div className={`flex justify-center ${className}`}>
-      <svg ref={barcodeRef}></svg>
+      <img ref={barcodeRef} alt={`Barcode for ${value}`} />
     </div>
   );
 }

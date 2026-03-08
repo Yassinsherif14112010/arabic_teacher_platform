@@ -6,17 +6,11 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal, bo
  * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  username: varchar("username", { length: 64 }).notNull().unique(),
+  password: varchar("password", { length: 255 }).notNull(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["teacher", "assistant"]).default("assistant").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -32,7 +26,9 @@ export const students = mysqlTable("students", {
   phone: varchar("phone", { length: 20 }),
   parentPhone: varchar("parentPhone", { length: 20 }),
   barcodeNumber: varchar("barcodeNumber", { length: 50 }).notNull().unique(),
+  grade: varchar("grade", { length: 100 }),
   groupId: int("groupId"),
+  feePaid: boolean("feePaid").default(false), // هل دفع المصاريف للشهر الحالي؟
   registrationDate: timestamp("registrationDate").defaultNow().notNull(),
   status: mysqlEnum("status", ["active", "inactive", "graduated"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -42,10 +38,10 @@ export const students = mysqlTable("students", {
 export type Student = typeof students.$inferSelect;
 export type InsertStudent = typeof students.$inferInsert;
 
-// جدول المجموعات الدراسية
 export const studyGroups = mysqlTable("studyGroups", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  grade: varchar("grade", { length: 100 }).notNull(), // الصف الدراسي
   description: text("description"),
   schedule: text("schedule"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -152,3 +148,16 @@ export const classrooms = mysqlTable("classrooms", {
 
 export type Classroom = typeof classrooms.$inferSelect;
 export type InsertClassroom = typeof classrooms.$inferInsert;
+
+// جدول رسوم السنة الدراسية (المستر يحدد رسوم لكل صف وسنة)
+export const feeSettings = mysqlTable("feeSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  academicYear: varchar("academicYear", { length: 9 }).notNull(), // مثال: 2024-2025
+  grade: varchar("grade", { length: 100 }).notNull(),
+  feeAmount: decimal("feeAmount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FeeSetting = typeof feeSettings.$inferSelect;
+export type InsertFeeSetting = typeof feeSettings.$inferInsert;

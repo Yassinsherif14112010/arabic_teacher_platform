@@ -173,6 +173,12 @@ type MarkdownProps = Omit<ComponentProps<typeof Streamdown>, "components" | "plu
   enableCode?: boolean;
   /** Enable/disable mermaid diagrams (default: true) */
   enableMermaid?: boolean;
+  /** Optional mode for typewriter effect */
+  mode?: "static" | "typewriter" | "streaming";
+  /** Speed of typewriter effect */
+  typewriterSpeed?: number;
+  /** Pass isAnimating for streaming mode */
+  isAnimating?: boolean;
 };
 
 /**
@@ -200,27 +206,19 @@ export const Markdown = memo(function Markdown({
   className,
   children,
   components: customComponents,
-  shikiTheme = ["github-light", "github-dark"],
-  controls = true,
-  enableCode = true,
-  enableMermaid = true,
+  enableCode: _enableCode,
+  enableMermaid: _enableMermaid,
+  mode: _mode,
+  typewriterSpeed: _typewriterSpeed,
+  isAnimating: _isAnimating,
   ...props
 }: MarkdownProps) {
-  // Build plugins object based on what's enabled
-  // @see https://streamdown.ai/docs/code-blocks
-  // @see https://streamdown.ai/docs/mermaid
-  const plugins: Record<string, unknown> = {};
-  if (enableCode) plugins.code = code;
-  if (enableMermaid) plugins.mermaid = mermaid;
-
   return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <Streamdown
       className={cn("text-foreground leading-relaxed", className)}
-      components={{ ...components, ...customComponents }}
-      plugins={plugins}
-      shikiTheme={shikiTheme}
-      controls={controls}
-      {...props}
+      components={{ ...components, ...customComponents } as any}
+      {...(props as any)}
     >
       {children}
     </Streamdown>

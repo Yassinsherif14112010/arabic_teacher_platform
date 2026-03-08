@@ -22,6 +22,20 @@
       "when": 1772481218605,
       "tag": "0002_overrated_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1772542371545,
+      "tag": "0003_tired_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1772967983358,
+      "tag": "0004_numerous_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

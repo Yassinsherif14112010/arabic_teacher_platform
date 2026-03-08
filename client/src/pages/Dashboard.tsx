@@ -1,16 +1,23 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Calendar, TrendingUp, DollarSign } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Users, Calendar, TrendingUp, DollarSign, BookOpen, Plus, Trash2, Edit } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/Sidebar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
 interface DashboardStats {
   totalStudents: number;
-  todayAttendance: number;
-  todayPayments: string;
+  activeStudents: number;
+  presentToday: number;
+  todayAttendance?: number;
+  todayPayments?: string;
 }
 
 export default function Dashboard() {
@@ -18,11 +25,32 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [stats, setStats] = useState<DashboardStats>({
     totalStudents: 0,
-    todayAttendance: 0,
-    todayPayments: "0",
+    activeStudents: 0,
+    presentToday: 0,
   });
 
   const { data: dashboardStats, isLoading } = trpc.students.getStats.useQuery();
+  const { data: studyGroups = [], refetch: refetchGroups } = trpc.groups.getAll.useQuery();
+
+  // Dialog State
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [groupFormData, setGroupFormData] = useState({ name: "", grade: "", schedule: "", description: "" });
+  const createGroupMutation = trpc.groups.create.useMutation({
+    onSuccess: () => {
+      toast.success("تم إضافة المجموعة بنجاح");
+      setIsGroupDialogOpen(false);
+      refetchGroups();
+      setGroupFormData({ name: "", grade: "", schedule: "", description: "" });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteGroupMutation = trpc.groups.delete.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف المجموعة");
+      refetchGroups();
+    }
+  });
 
   useEffect(() => {
     if (dashboardStats) {
@@ -32,151 +60,226 @@ export default function Dashboard() {
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600 text-xl">جاري التحميل...</div>
+      <div className="min-h-screen bg-black/95 flex items-center justify-center">
+        <div className="text-white/70 text-xl animate-pulse">جاري التحميل...</div>
       </div>
     );
   }
 
   const attendanceRate = stats.totalStudents > 0
-    ? Math.round((stats.todayAttendance / stats.totalStudents) * 100)
+    ? Math.round((stats.presentToday / stats.totalStudents) * 100)
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0a0a0b] text-foreground font-sans selection:bg-primary/30 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
+
       <Sidebar userName={user?.name || ""} />
 
-      <div className="md:mr-64">
-        {/* Top Navbar */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-          <div className="px-4 md:px-6 py-4">
-            <h1 className="text-3xl font-bold text-gray-900">لوحة التحكم</h1>
-            <p className="text-gray-600 text-sm mt-1">مرحباً بك في منصة الشاعر</p>
+      <div className="md:mr-64 relative z-10 p-4 md:p-8">
+        {/* Header */}
+        <header className="mb-8 flex items-end justify-between border-b border-white/10 pb-6">
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">لوحة التحكم</h1>
+            <p className="text-muted-foreground">مرحباً بك مجدداً يا {user?.name || "أستاذنا"}! إليك نظرة عامة على منصتك.</p>
           </div>
+        </header>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <StatCard
+            title="إجمالي الطلاب"
+            value={stats.totalStudents}
+            subtitle="طالب مسجل"
+            icon={<Users className="w-5 h-5 text-blue-400" />}
+            gradient="from-blue-500/20 to-blue-500/5 border-blue-500/20"
+          />
+          <StatCard
+            title="حضور اليوم"
+            value={stats.presentToday}
+            subtitle="حاضرين حتى الآن"
+            icon={<Calendar className="w-5 h-5 text-emerald-400" />}
+            gradient="from-emerald-500/20 to-emerald-500/5 border-emerald-500/20"
+          />
+          <StatCard
+            title="نسبة الحضور"
+            value={`${attendanceRate}%`}
+            subtitle="من الإجمالي"
+            icon={<TrendingUp className="w-5 h-5 text-orange-400" />}
+            gradient="from-orange-500/20 to-orange-500/5 border-orange-500/20"
+          />
+          <StatCard
+            title="الطلاب النشطين"
+            value={stats.activeStudents}
+            subtitle="متفاعلين هذا الشهر"
+            icon={<BookOpen className="w-5 h-5 text-purple-400" />}
+            gradient="from-purple-500/20 to-purple-500/5 border-purple-500/20"
+          />
         </div>
 
-        {/* Main Content */}
-        <div className="p-4 md:p-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-            {/* Total Students */}
-            <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">إجمالي الطلاب</p>
-                    <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                      {stats.totalStudents}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-blue-100 rounded-lg">
-                    <Users className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
-                <p className="text-gray-500 text-xs">عدد الطلاب المسجلين</p>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Main Content Area - Left 2 Columns */}
+          <div className="xl:col-span-2 space-y-8">
+
+            {/* Study Groups Widget */}
+            <Card className="bg-white/5 border-white/10 backdrop-blur-xl shadow-2xl p-6 rounded-2xl">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-6 h-6 text-primary" />
+                  المجموعات الدراسية المتاحة
+                </h2>
+                <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 transition-all rounded-full px-5">
+                      <Plus className="w-4 h-4 ml-2" /> مجموعة جديدة
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="glass-panel text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-bold text-center mb-4">إضافة مجموعة دراسية</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">اسم المجموعة (مثال: سبت وإثنين 4 عصراً)</Label>
+                        <Input id="name" value={groupFormData.name} onChange={e => setGroupFormData({ ...groupFormData, name: e.target.value })} className="bg-white/5 border-white/10 text-white" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>الصف الدراسي</Label>
+                        <Select onValueChange={(v) => setGroupFormData({ ...groupFormData, grade: v })}>
+                          <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                            <SelectValue placeholder="اختر الصف" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#1a1b1e] text-white border-white/10">
+                            <SelectItem value="الصف الأول الثانوي">الصف الأول الثانوي</SelectItem>
+                            <SelectItem value="الصف الثاني الثانوي">الصف الثاني الثانوي</SelectItem>
+                            <SelectItem value="الصف الثالث الثانوي">الصف الثالث الثانوي</SelectItem>
+                            <SelectItem value="الصف الأول الإعدادي">الصف الأول الإعدادي</SelectItem>
+                            <SelectItem value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</SelectItem>
+                            <SelectItem value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="schedule">المواعيد (اختياري)</Label>
+                        <Input id="schedule" value={groupFormData.schedule} onChange={e => setGroupFormData({ ...groupFormData, schedule: e.target.value })} className="bg-white/5 border-white/10 text-white" />
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl py-6 mt-2 shadow-[0_0_20px_rgba(59,130,246,0.4)]"
+                      onClick={() => createGroupMutation.mutate(groupFormData)}
+                      disabled={createGroupMutation.isPending || !groupFormData.name || !groupFormData.grade}
+                    >
+                      حفظ المجموعة
+                    </Button>
+                  </DialogContent>
+                </Dialog>
               </div>
+
+              {studyGroups.length === 0 ? (
+                <div className="text-center py-10 bg-white/5 rounded-xl border border-white/5 border-dashed">
+                  <p className="text-muted-foreground mb-4">لا توجد مجموعات مسجلة حالياً.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {studyGroups.map((group: any) => (
+                    <div key={group.id} className="relative group bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-xl transition-all duration-300">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold text-lg text-white">{group.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            if (confirm("هل تريد تأكيد الحذف؟")) deleteGroupMutation.mutate({ id: group.id });
+                          }}
+                          className="h-8 w-8 text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <span className="inline-block px-3 py-1 bg-primary/20 text-primary text-xs rounded-full font-medium mb-3">
+                        {group.grade}
+                      </span>
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Calendar className="w-4 h-4 opacity-70" />
+                        {group.schedule || "مواعيد غير محددة"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
-            {/* Today Attendance */}
-            <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">الحضور اليوم</p>
-                    <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                      {stats.todayAttendance}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-green-100 rounded-lg">
-                    <Calendar className="w-8 h-8 text-green-600" />
-                  </div>
-                </div>
-                <p className="text-gray-500 text-xs">عدد الطلاب الحاضرين</p>
-              </div>
-            </Card>
+            {/* Quick Actions Panel */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Button
+                onClick={() => navigate("/students")}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-8 rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all text-lg flex items-center justify-center gap-3 border border-white/10"
+              >
+                <Users className="w-6 h-6" />
+                إدارة الطلاب الشاملة
+              </Button>
 
-            {/* Today Payments */}
-            <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">التحصيل اليوم</p>
-                    <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                      {parseInt(stats.todayPayments).toLocaleString("ar-EG")}
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <DollarSign className="w-8 h-8 text-purple-600" />
-                  </div>
-                </div>
-                <p className="text-gray-500 text-xs">جنيه مصري</p>
-              </div>
-            </Card>
-
-            {/* Attendance Rate */}
-            <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">نسبة الحضور</p>
-                    <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                      {attendanceRate}%
-                    </h3>
-                  </div>
-                  <div className="p-3 bg-orange-100 rounded-lg">
-                    <TrendingUp className="w-8 h-8 text-orange-600" />
-                  </div>
-                </div>
-                <p className="text-gray-500 text-xs">من إجمالي الطلاب</p>
-              </div>
-            </Card>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-            <Button
-              onClick={() => navigate("/students")}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <Users className="w-5 h-5" />
-              إدارة الطلاب
-            </Button>
-
-            <Button
-              onClick={() => navigate("/attendance")}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <Calendar className="w-5 h-5" />
-              تسجيل الحضور
-            </Button>
-
-
-          </div>
-
-          {/* Welcome Card */}
-          <Card className="bg-white border border-gray-200 shadow-sm">
-            <div className="p-6 md:p-8">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <img
-                  src="/logo.jpg"
-                  alt="محسن شاكر"
-                  className="h-24 w-24 md:h-32 md:w-32 rounded-lg border-4 border-blue-200"
-                />
-                <div className="flex-1 text-center md:text-right">
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">الشاعر</h2>
-                  <p className="text-blue-600 font-medium mb-4">
-                    الشاعر في اللغة العربية - محسن شاكر
-                  </p>
-                  <p className="text-gray-600 leading-relaxed">
-                    منصة متكاملة لإدارة الطلاب والحضور والدرجات والمصروفات. توفر أدوات احترافية
-                    لتسهيل عملية التدريس والمتابعة الفعالة لأداء الطلاب.
-                  </p>
-                </div>
-              </div>
+              <Button
+                onClick={() => navigate("/attendance")}
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-8 rounded-2xl shadow-lg hover:shadow-emerald-500/25 transition-all text-lg flex items-center justify-center gap-3 border border-white/10"
+              >
+                <Calendar className="w-6 h-6" />
+                تسجيل الحضور اليومي
+              </Button>
             </div>
-          </Card>
+          </div>
+
+          {/* Right Sidebar - Welcome / Teacher Badge */}
+          <div className="xl:col-span-1">
+            <Card className="bg-gradient-to-br from-white/10 to-transparent border-white/10 backdrop-blur-xl shadow-2xl overflow-hidden rounded-3xl relative h-full min-h-[400px]">
+              <div className="absolute top-0 right-0 w-full h-32 bg-gradient-to-b from-primary/30 to-transparent opacity-50 pointer-events-none" />
+              <div className="p-8 flex flex-col items-center justify-center h-full text-center relative z-10">
+                <div className="relative mb-6">
+                  <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-primary to-purple-500 shadow-xl shadow-primary/20">
+                    <img
+                      src="/logo.jpg"
+                      alt="الشاعر"
+                      className="w-full h-full rounded-full object-cover border-4 border-[#0a0a0b]"
+                    />
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 bg-emerald-500 w-6 h-6 rounded-full border-4 border-[#0a0a0b]" />
+                </div>
+
+                <h2 className="text-3xl font-bold text-white mb-2">الشاعر السحري</h2>
+                <h3 className="text-primary font-medium tracking-wide mb-6">أ. محسن شاكر</h3>
+
+                <div className="w-16 h-1 bg-white/10 rounded-full mb-6" />
+
+                <p className="text-muted-foreground leading-relaxed text-sm px-4">
+                  نظام إدارة تعليمي متكامل بالذكاء الاصطناعي يوفر لكم تجربة تدريس فريدة ومتابعة دقيقة لمسار الطلاب.
+                </p>
+              </div>
+            </Card>
+          </div>
+
         </div>
       </div>
     </div>
   );
 }
+
+// Helper Card Component
+function StatCard({ title, value, subtitle, icon, gradient }: { title: string, value: string | number, subtitle: string, icon: React.ReactNode, gradient: string }) {
+  return (
+    <div className={`relative overflow-hidden bg-white/5 backdrop-blur-md border rounded-2xl p-6 transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 ${gradient}`}>
+      <div className="flex justify-between items-start mb-4">
+        <div className="p-3 bg-white/5 rounded-xl border border-white/10 shadow-inner">
+          {icon}
+        </div>
+      </div>
+      <div>
+        <h3 className="text-4xl font-extrabold text-white mb-1 shadow-black/50 drop-shadow-sm">{value}</h3>
+        <p className="text-white/80 font-medium text-sm">{title}</p>
+        <p className="text-white/40 text-xs mt-2 font-light">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+

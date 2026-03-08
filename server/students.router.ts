@@ -14,8 +14,8 @@ import {
   getStudentGrades,
   recordPayment,
   getStudentPayments,
+  getAllPayments,
   createStudyGroup,
-  getStudyGroups,
 } from "./db";
 
 export const studentsRouter = router({
@@ -36,7 +36,9 @@ export const studentsRouter = router({
         phone: z.string().optional(),
         parentPhone: z.string().optional(),
         barcodeNumber: z.string().min(1, "رقم الباركود مطلوب"),
+        grade: z.string().optional(),
         groupId: z.number().optional(),
+        feePaid: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -45,7 +47,9 @@ export const studentsRouter = router({
         phone: input.phone,
         parentPhone: input.parentPhone,
         barcodeNumber: input.barcodeNumber,
+        grade: input.grade,
         groupId: input.groupId,
+        feePaid: input.feePaid,
       });
     }),
 
@@ -69,6 +73,7 @@ export const studentsRouter = router({
         phone: z.string().optional(),
         parentPhone: z.string().optional(),
         groupId: z.number().optional(),
+        feePaid: z.boolean().optional(),
         status: z.enum(["active", "inactive", "graduated"]).optional(),
       })
     )
@@ -83,16 +88,7 @@ export const studentsRouter = router({
       return await deleteStudent(input.id);
     }),
 
-  updatePayment: protectedProcedure
-    .input(
-      z.object({
-        studentId: z.number(),
-        hasPaidFees: z.boolean(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      return await updateStudent(input.studentId, { hasPaidFees: input.hasPaidFees });
-    }),
+
 
   // Attendance
   recordAttendance: protectedProcedure
@@ -177,20 +173,8 @@ export const studentsRouter = router({
       return await getStudentPayments(input.studentId);
     }),
 
-  // Study Groups
-  createStudyGroup: protectedProcedure
-    .input(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().optional(),
-        schedule: z.string().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      return await createStudyGroup(input);
-    }),
-
-  listStudyGroups: protectedProcedure.query(async () => {
-    return await getStudyGroups();
+  getAllPayments: protectedProcedure.query(async () => {
+    return await getAllPayments();
   }),
+
 });

@@ -1,8 +1,9 @@
+import React from 'react';
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Users, Plus, Edit2, Trash2, Printer, Eye, Search } from "lucide-react";
+import { Users, Plus, Trash2, Printer, Eye, Search, CheckCircle2, XCircle, Edit2, X, Save } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
@@ -11,34 +12,53 @@ import { toast } from "sonner";
 
 interface StudentForm {
   name: string;
-  email?: string;
-  phone?: string;
-  parentPhone?: string;
+  phone: string;
+  parentPhone: string;
+  grade: string;
+  groupId: number | null;
+  feePaid: boolean;
 }
+
+const GRADES = [
+  { label: "🏫 الصف الأول الإعدادي", value: "الصف الأول الإعدادي" },
+  { label: "🏫 الصف الثاني الإعدادي", value: "الصف الثاني الإعدادي" },
+  { label: "🏫 الصف الثالث الإعدادي", value: "الصف الثالث الإعدادي" },
+  { label: "🎓 الصف الأول الثانوي", value: "الصف الأول الثانوي" },
+  { label: "🎓 الصف الثاني الثانوي", value: "الصف الثاني الثانوي" },
+  { label: "🎓 الصف الثالث الثانوي", value: "الصف الثالث الثانوي" },
+];
+
+const empty: StudentForm = { name: "", phone: "", parentPhone: "", grade: "", groupId: null, feePaid: false };
 
 export default function Students() {
   const { user, loading } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [editingStudent, setEditingStudent] = useState<any>(null);
+  const [editForm, setEditForm] = useState<Partial<StudentForm>>({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState<StudentForm>({
-    name: "",
-    email: "",
-    phone: "",
-    parentPhone: "",
-  });
+  const [formData, setFormData] = useState<StudentForm>(empty);
 
   const { data: students = [], isLoading, refetch } = trpc.students.list.useQuery();
+  const { data: studyGroups = [] } = trpc.groups.getAll.useQuery();
+
   const createStudentMutation = trpc.students.create.useMutation({
     onSuccess: () => {
       toast.success("تم إضافة الطالب بنجاح!");
-      setFormData({ name: "", email: "", phone: "", parentPhone: "" });
+      setFormData(empty);
       setShowForm(false);
       refetch();
     },
-    onError: (error) => {
-      toast.error("حدث خطأ: " + error.message);
+    onError: (error) => toast.error("حدث خطأ: " + error.message),
+  });
+
+  const updateStudentMutation = trpc.students.update.useMutation({
+    onSuccess: () => {
+      toast.success("تم تعديل بيانات الطالب!");
+      setEditingStudent(null);
+      refetch();
     },
+    onError: (error) => toast.error("حدث خطأ: " + error.message),
   });
 
   const deleteStudentMutation = trpc.students.delete.useMutation({
@@ -46,37 +66,54 @@ export default function Students() {
       toast.success("تم حذف الطالب بنجاح!");
       refetch();
     },
-    onError: (error) => {
-      toast.error("حدث خطأ: " + error.message);
-    },
-  });
-
-  const updatePaymentMutation = trpc.students.updatePayment.useMutation({
-    onSuccess: () => {
-      refetch();
-    },
-    onError: (error) => {
-      toast.error("حدث خطأ: " + error.message);
-    },
+    onError: (error) => toast.error("حدث خطأ: " + error.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) {
-      toast.error("يرجى إدخال اسم الطالب");
-      return;
-    }
-    const barcodeNumber = String(Math.floor(Math.random() * 9000) + 1000); // 4 أرقام من 1000 إلى 9999
+    if (!formData.name) { toast.error("يرجى إدخال اسم الطالب"); return; }
+    const barcodeNumber = String(Date.now()).slice(-8);
     createStudentMutation.mutate({
-      ...formData,
+      name: formData.name,
       barcodeNumber,
+      phone: formData.phone || undefined,
+      parentPhone: formData.parentPhone || undefined,
+      grade: formData.grade || undefined,
+      groupId: formData.groupId || undefined,
+      feePaid: formData.feePaid,
     });
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("هل أنت متأكد من حذف هذا الطالب؟")) {
-      deleteStudentMutation.mutate({ id });
-    }
+  const startEdit = (student: any) => {
+    setEditingStudent(student.id);
+    setEditForm({
+      name: student.name,
+      phone: student.phone || "",
+      parentPhone: student.parentPhone || "",
+      grade: student.grade || "",
+      groupId: student.groupId || null,
+      feePaid: student.feePaid || false,
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingStudent) return;
+    updateStudentMutation.mutate({
+      id: editingStudent,
+      name: editForm.name,
+      phone: editForm.phone || undefined,
+      parentPhone: editForm.parentPhone || undefined,
+      groupId: editForm.groupId || undefined,
+      feePaid: editForm.feePaid,
+      status: (editForm as any).status,
+    });
+  };
+
+  const toggleFeePaid = (student: any) => {
+    updateStudentMutation.mutate({
+      id: student.id,
+      feePaid: !student.feePaid,
+    });
   };
 
   const filteredStudents = students.filter((s: any) =>
@@ -84,312 +121,248 @@ export default function Students() {
     s.barcodeNumber.includes(searchTerm)
   );
 
+  const studentsByGrade = React.useMemo(() => {
+    const grouped = filteredStudents.reduce((acc: any, student: any) => {
+      const grade = student.grade || "بدون صف";
+      if (!acc[grade]) acc[grade] = [];
+      acc[grade].push(student);
+      return acc;
+    }, {});
+    return Object.entries(grouped)
+      .map(([grade, sts]) => ({ grade, students: sts as any[] }))
+      .sort((a, b) => a.grade.localeCompare(b.grade));
+  }, [filteredStudents]);
+
+  const groupsForGrade = (grade: string) => studyGroups.filter((g: any) => g.grade === grade);
+
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600 text-xl">جاري التحميل...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground text-xl">جاري التحميل...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background" dir="rtl">
       <Sidebar userName={user?.name || ""} />
 
       <div className="md:mr-64">
-        {/* Top Navbar */}
-        <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        {/* Navbar */}
+        <div className="bg-card border-b border-border sticky top-0 z-30 shadow-sm">
           <div className="px-4 md:px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Users className="w-6 h-6 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">إدارة الطلاب</h1>
+              <Users className="w-6 h-6 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">إدارة الطلاب</h1>
+              <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{students.length} طالب</span>
             </div>
-            <Button
-              onClick={() => setShowForm(!showForm)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 flex items-center gap-2 w-full md:w-auto"
-            >
-              <Plus size={18} />
-              إضافة طالب جديد
+            <Button onClick={() => setShowForm(!showForm)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg transition-all flex items-center gap-2">
+              <Plus size={18} /> إضافة طالب جديد
             </Button>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="p-4 md:p-6">
-          {/* Add Student Form */}
+        <div className="p-4 md:p-6 space-y-6">
+          {/* Add Form */}
           {showForm && (
-            <Card className="bg-white border border-gray-200 shadow-sm mb-6">
-              <div className="p-4 md:p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">إضافة طالب جديد</h2>
+            <Card className="border border-border shadow-sm">
+              <div className="p-5">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Plus size={20} className="text-primary" /> إضافة طالب جديد</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        اسم الطالب *
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="أدخل اسم الطالب"
-                        value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
-                        className="bg-white border border-gray-300 text-gray-900 placeholder-gray-400"
-                      />
+                      <label className="block text-sm font-medium mb-1">اسم الطالب *</label>
+                      <Input placeholder="الاسم بالكامل" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        البريد الإلكتروني
-                      </label>
-                      <Input
-                        type="email"
-                        placeholder="البريد الإلكتروني"
-                        value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
-                        }
-                        className="bg-white border border-gray-300 text-gray-900 placeholder-gray-400"
-                      />
+                      <label className="block text-sm font-medium mb-1">رقم الطالب</label>
+                      <Input type="tel" placeholder="رقم الهاتف" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        رقم الطالب
-                      </label>
-                      <Input
-                        type="tel"
-                        placeholder="رقم الطالب"
-                        value={formData.phone}
-                        onChange={(e) =>
-                          setFormData({ ...formData, phone: e.target.value })
-                        }
-                        className="bg-white border border-gray-300 text-gray-900 placeholder-gray-400"
-                      />
+                      <label className="block text-sm font-medium mb-1">رقم ولي الأمر</label>
+                      <Input type="tel" placeholder="رقم الهاتف" value={formData.parentPhone} onChange={e => setFormData({ ...formData, parentPhone: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-2">
-                        رقم ولي الأمر
-                      </label>
-                      <Input
-                        type="tel"
-                        placeholder="رقم ولي الأمر"
-                        value={formData.parentPhone}
-                        onChange={(e) =>
-                          setFormData({ ...formData, parentPhone: e.target.value })
-                        }
-                        className="bg-white border border-gray-300 text-gray-900 placeholder-gray-400"
-                      />
+                      <label className="block text-sm font-medium mb-1">الصف الدراسي</label>
+                      <select value={formData.grade} onChange={e => setFormData({ ...formData, grade: e.target.value, groupId: null })} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground">
+                        <option value="">اختر الصف</option>
+                        {GRADES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    {formData.grade && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">المجموعة الدراسية</label>
+                        <select value={formData.groupId || ""} onChange={e => setFormData({ ...formData, groupId: e.target.value ? parseInt(e.target.value) : null })} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground">
+                          <option value="">بدون مجموعة حالياً</option>
+                          {groupsForGrade(formData.grade).map((g: any) => (
+                            <option key={g.id} value={g.id}>{g.name}{g.schedule ? ` — ${g.schedule}` : ""}</option>
+                          ))}
+                        </select>
+                        {groupsForGrade(formData.grade).length === 0 && (
+                          <p className="text-xs text-orange-500 mt-1">لا توجد مجموعات لهذا الصف. يمكنك إضافتها من لوحة التحكم.</p>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 pt-2">
+                      <input type="checkbox" id="feePaid" checked={formData.feePaid} onChange={e => setFormData({ ...formData, feePaid: e.target.checked })} className="w-4 h-4" />
+                      <label htmlFor="feePaid" className="text-sm font-medium cursor-pointer">دفع المصاريف ✓</label>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      disabled={createStudentMutation.isPending}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300"
-                    >
+                  <div className="flex gap-2 pt-2">
+                    <Button type="submit" disabled={createStudentMutation.isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 rounded-lg">
                       {createStudentMutation.isPending ? "جاري الحفظ..." : "حفظ الطالب"}
                     </Button>
-                    <Button
-                      type="button"
-                      onClick={() => setShowForm(false)}
-                      className="bg-gray-300 hover:bg-gray-400 text-gray-900 font-bold py-2 px-6 rounded-lg transition-all duration-300"
-                    >
-                      إلغاء
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
                   </div>
                 </form>
               </div>
             </Card>
           )}
 
-          {/* Search Bar */}
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute right-3 top-3 text-gray-400" size={20} />
-              <Input
-                type="text"
-                placeholder="ابحث عن طالب أو رقم باركود..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-white border border-gray-300 text-gray-900 placeholder-gray-400 pr-10"
-              />
-            </div>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute right-3 top-3 text-muted-foreground" size={18} />
+            <Input placeholder="ابحث عن طالب أو باركود..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pr-10" />
           </div>
 
-          {/* Students Table */}
-          <Card className="bg-white border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
-                      الرقم
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
-                      اسم الطالب
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden md:table-cell">
-                      الباركود
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm hidden lg:table-cell">
-                      البريد الإلكتروني
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
-                      دفع المصروفات
-                    </th>
-                    <th className="px-4 md:px-6 py-4 text-right text-gray-700 font-semibold text-sm">
-                      الإجراءات
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 md:px-6 py-8 text-center text-gray-500">
-                        لا توجد طلاب مسجلين
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredStudents.map((student: any, index: number) => (
-                      <tr
-                        key={student.id}
-                        className="border-b border-gray-200 hover:bg-gray-50 transition-colors duration-200"
-                      >
-                        <td className="px-4 md:px-6 py-4 text-gray-700 text-sm">{index + 1}</td>
-                        <td className="px-4 md:px-6 py-4 text-gray-900 font-medium text-sm">
-                          {student.name}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 text-blue-600 text-sm font-mono hidden md:table-cell">
-                          {student.barcodeNumber}
-                        </td>
-                        <td className="px-4 md:px-6 py-4 text-gray-600 text-sm hidden lg:table-cell">
-                          {student.email || "-"}
-                        </td>
-                        <td className="px-4 md:px-6 py-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={student.hasPaidFees}
-                              onChange={(e) => {
-                                updatePaymentMutation.mutate({
-                                  studentId: student.id,
-                                  hasPaidFees: e.target.checked,
-                                });
-                                toast.success(e.target.checked ? "✅ تم تسجيل الدفع" : "❌ تم إلغاء الدفع");
-                              }}
-                              className="w-5 h-5 text-green-600 rounded cursor-pointer"
-                            />
-                            <span className={`text-sm font-bold ${
-                              student.hasPaidFees ? "text-green-600" : "text-red-600"
-                            }`}>
-                              {student.hasPaidFees ? "دفع" : "لم يدفع"}
-                            </span>
-                          </label>
-                        </td>
-                        <td className="px-4 md:px-6 py-4">
-                          <div className="flex gap-2 flex-wrap">
-                            <Button
-                              onClick={() => setSelectedStudent(student)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition-all duration-200"
-                              title="عرض البطاقة"
-                            >
-                              <Eye size={16} />
-                            </Button>
-                            <Button
-                              onClick={() => window.print()}
-                              className="bg-green-600 hover:bg-green-700 text-white p-2 rounded transition-all duration-200"
-                              title="طباعة البطاقة"
-                            >
-                              <Printer size={16} />
-                            </Button>
-                            <Button
-                              onClick={() => handleDelete(student.id)}
-                              className="bg-red-600 hover:bg-red-700 text-white p-2 rounded transition-all duration-200"
-                              title="حذف الطالب"
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Student Card Modal - Print Friendly */}
-          {selectedStudent && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:bg-white print:p-0">
-              <Card className="bg-white border border-gray-200 max-w-md w-full print:border-0 print:shadow-none print:max-w-full">
-                <div className="p-8 print:p-4">
-                  <div className="text-center mb-6">
-                    <img
-                      src="/logo.jpg"
-                      alt="محسن شاكر"
-                      className="h-16 w-16 rounded-lg mx-auto mb-4 border border-blue-200"
-                    />
-                    <h2 className="text-2xl font-bold text-gray-900">الشاعر</h2>
-                    <p className="text-blue-600 text-sm font-medium">منصة إدارة الطلاب</p>
-                  </div>
-
-                  <div className="bg-blue-50 rounded-lg p-4 mb-6 border border-blue-200">
-                    <p className="text-gray-700 text-sm mb-2 font-medium">اسم الطالب</p>
-                    <p className="text-gray-900 text-lg font-bold mb-4">
-                      {selectedStudent.name}
-                    </p>
-
-                    <p className="text-gray-700 text-sm mb-2 font-medium">رقم الباركود</p>
-                    <p className="text-blue-600 text-sm font-mono mb-4">
-                      {selectedStudent.barcodeNumber}
-                    </p>
-
-                    <BarcodeDisplay
-                      value={selectedStudent.barcodeNumber}
-                      format="CODE128"
-                      width={2}
-                      height={80}
-                      displayValue={true}
-                    />
-                  </div>
-
-                  <div className="flex gap-2 print:hidden">
-                    <Button
-                      onClick={() => window.print()}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition-all duration-300"
-                    >
-                      <Printer size={18} className="ml-2" />
-                      طباعة
-                    </Button>
-                    <Button
-                      onClick={() => setSelectedStudent(null)}
-                      className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 rounded-lg transition-all duration-300"
-                    >
-                      إغلاق
-                    </Button>
+          {/* Tables by Grade */}
+          {studentsByGrade.length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground border border-dashed">لا توجد طلاب مسجلين</Card>
+          ) : (
+            studentsByGrade.map(({ grade, students: gradeStudents }) => (
+              <Card key={grade} className="border border-border shadow-sm overflow-hidden">
+                <div className="bg-muted border-b border-border px-4 py-3 border-r-4 border-r-primary flex justify-between items-center">
+                  <h3 className="font-bold text-lg">{grade}</h3>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-green-600 font-medium">
+                      دفع: {gradeStudents.filter((s: any) => s.feePaid).length}
+                    </span>
+                    <span className="text-xs text-red-500 font-medium">
+                      لم يدفع: {gradeStudents.filter((s: any) => !s.feePaid).length}
+                    </span>
+                    <span className="text-sm font-medium text-muted-foreground bg-background px-3 py-1 rounded-full border border-border">
+                      {gradeStudents.length} طالب
+                    </span>
                   </div>
                 </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground">
+                        <th className="px-4 py-3 text-right">#</th>
+                        <th className="px-4 py-3 text-right">اسم الطالب</th>
+                        <th className="px-4 py-3 text-right hidden md:table-cell">الباركود</th>
+                        <th className="px-4 py-3 text-right hidden lg:table-cell">المجموعة</th>
+                        <th className="px-4 py-3 text-center">المصاريف</th>
+                        <th className="px-4 py-3 text-right">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradeStudents.map((student: any, index: number) => {
+                        const isEditing = editingStudent === student.id;
+                        const studentGroups = groupsForGrade(student.grade || "");
+                        return (
+                          <tr key={student.id} className={`border-b border-border transition-colors ${isEditing ? "bg-primary/5" : "hover:bg-muted/40"}`}>
+                            <td className="px-4 py-3 text-muted-foreground font-bold">{index + 1}</td>
+                            <td className="px-4 py-3 font-medium">
+                              {isEditing
+                                ? <Input value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="h-8 text-sm" />
+                                : student.name
+                              }
+                            </td>
+                            <td className="px-4 py-3 text-blue-600 font-mono hidden md:table-cell">{student.barcodeNumber}</td>
+                            <td className="px-4 py-3 hidden lg:table-cell">
+                              <select
+                                value={student.groupId || ""}
+                                onChange={e => updateStudentMutation.mutate({ id: student.id, groupId: e.target.value ? parseInt(e.target.value) : undefined })}
+                                disabled={updateStudentMutation.isPending}
+                                className="w-full px-2 py-1.5 border border-border rounded bg-background text-foreground text-xs focus:outline-none focus:border-primary"
+                              >
+                                <option value="">بدون مجموعة</option>
+                                {groupsForGrade(student.grade || "").map((g: any) => (
+                                  <option key={g.id} value={g.id}>{g.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {isEditing ? (
+                                <input type="checkbox" checked={!!editForm.feePaid} onChange={e => setEditForm({ ...editForm, feePaid: e.target.checked })} className="w-4 h-4" />
+                              ) : (
+                                <button
+                                  onClick={() => toggleFeePaid(student)}
+                                  disabled={updateStudentMutation.isPending}
+                                  title={student.feePaid ? "دفع المصاريف — اضغط للتغيير" : "لم يدفع — اضغط للتغيير"}
+                                  className="mx-auto flex items-center justify-center hover:scale-110 transition-transform"
+                                >
+                                  {student.feePaid
+                                    ? <CheckCircle2 size={20} className="text-green-500" />
+                                    : <XCircle size={20} className="text-red-400" />}
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-1.5 flex-wrap">
+                                {isEditing ? (
+                                  <>
+                                    <Button onClick={saveEdit} disabled={updateStudentMutation.isPending} className="bg-green-600 hover:bg-green-700 text-white p-1.5 h-8 rounded" title="حفظ"><Save size={15} /></Button>
+                                    <Button variant="outline" onClick={() => setEditingStudent(null)} className="p-1.5 h-8 rounded" title="إلغاء"><X size={15} /></Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button onClick={() => setSelectedStudent(student)} className="bg-primary hover:bg-primary/90 text-primary-foreground p-1.5 h-8 rounded" title="عرض البطاقة"><Eye size={15} /></Button>
+                                    <Button onClick={() => startEdit(student)} className="bg-amber-500 hover:bg-amber-600 text-white p-1.5 h-8 rounded" title="تعديل"><Edit2 size={15} /></Button>
+                                    <Button onClick={() => { if (confirm("هل أنت متأكد من حذف هذا الطالب؟")) deleteStudentMutation.mutate({ id: student.id }); }} className="bg-red-600 hover:bg-red-700 text-white p-1.5 h-8 rounded" title="حذف"><Trash2 size={15} /></Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </Card>
-            </div>
+            ))
           )}
         </div>
       </div>
 
-      {/* Print Styles */}
-      <style>{`
-        @media print {
-          body {
-            margin: 0;
-            padding: 0;
-          }
-          .fixed, .md\\:mr-64, button:not(.print\\:block) {
-            display: none !important;
-          }
-          .print\\:block {
-            display: block !important;
-          }
-        }
-      `}</style>
+      {/* Student Card Modal */}
+      {selectedStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-sm w-full">
+            <div className="p-6">
+              <div className="text-center mb-5">
+                <img src="/logo.jpg" alt="logo" className="h-14 w-14 rounded-lg mx-auto mb-3 border border-border" onError={(e: any) => e.target.style.display = "none"} />
+                <h2 className="text-xl font-bold">الشاعر في اللغة العربية</h2>
+                <p className="text-sm text-muted-foreground">أ. محسن شاكر</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4 mb-4 border border-border space-y-2 text-sm">
+                <div><span className="text-muted-foreground">الاسم: </span><span className="font-bold">{selectedStudent.name}</span></div>
+                <div><span className="text-muted-foreground">الصف: </span><span>{selectedStudent.grade || "—"}</span></div>
+                <div><span className="text-muted-foreground">الباركود: </span><span className="font-mono text-primary">{selectedStudent.barcodeNumber}</span></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">المصاريف: </span>
+                  {selectedStudent.feePaid
+                    ? <span className="text-green-600 font-medium flex items-center gap-1"><CheckCircle2 size={14} /> مدفوعة</span>
+                    : <span className="text-red-500 font-medium flex items-center gap-1"><XCircle size={14} /> غير مدفوعة</span>
+                  }
+                </div>
+                <div className="pt-2">
+                  <BarcodeDisplay value={selectedStudent.barcodeNumber} format="CODE128" width={2} height={70} displayValue={true} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => window.print()} className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg">
+                  <Printer size={16} className="ml-2" /> طباعة
+                </Button>
+                <Button variant="outline" onClick={() => setSelectedStudent(null)} className="flex-1 rounded-lg">إغلاق</Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
