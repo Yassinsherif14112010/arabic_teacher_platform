@@ -104,7 +104,14 @@ app.get("/api/seed", async (req, res) => {
     ];
 
     console.log("Emptying database and seeding groups & students via API...");
-    // Clear old data
+    
+    // Clear old data (delete child tables first to avoid foreign key/referential issues)
+    const { attendance, grades, payments, monthlyFees } = await import("../../drizzle/schema");
+    
+    await db.delete(attendance);
+    await db.delete(grades);
+    await db.delete(payments);
+    await db.delete(monthlyFees);
     await db.delete(students);
     await db.delete(studyGroups);
 
