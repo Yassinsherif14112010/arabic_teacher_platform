@@ -39,6 +39,52 @@ app.use(cookieParser());
 // Chat API with streaming and tool calling
 registerChatRoutes(app);
 
+// API route to trigger seeding on production
+app.get("/api/seed", async (req, res) => {
+  try {
+    const { getDb } = await import("../db");
+    const { students } = await import("../../drizzle/schema");
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "No database connection available" });
+    }
+
+    const studentsList = [
+      { name: "محمود أحمد صالح", parentPhone: "01092770125" },
+      { name: "حازم هاني السمر", parentPhone: "01028601171" },
+      { name: "عمر علي", parentPhone: "01011807890" },
+      { name: "مريم محمد عبد الوهاب", parentPhone: "01017833341" },
+      { name: "أسماء مصطفى عثمان", parentPhone: "01020712399" },
+      { name: "آية حسن إبراهيم", parentPhone: "01012170153" },
+      { name: "منة الله خيرت", parentPhone: "01224249624" },
+      { name: "ندى أحمد", parentPhone: "01098197401" },
+      { name: "مودة ربيع السيد", parentPhone: "01091565718" },
+      { name: "معتز الشامي", parentPhone: "01114758575" },
+      { name: "مجدي هاني", parentPhone: "01229963442" },
+      { name: "معتز رجب", parentPhone: "01118956413" },
+      { name: "أميرة سعيد الحواري", parentPhone: "01500322232" },
+      { name: "مصطفى المرزوقي", parentPhone: "01022228059" },
+    ];
+
+    console.log("Seeding students via API...");
+    let addedCount = 0;
+    for (const student of studentsList) {
+      const barcodeNumber = `STU${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      await db.insert(students).values({
+        name: student.name,
+        parentPhone: student.parentPhone,
+        barcodeNumber,
+        status: "active",
+      });
+      addedCount++;
+    }
+    return res.json({ success: true, message: `Seeded ${addedCount} students successfully` });
+  } catch (error: any) {
+    console.error("Seed error:", error);
+    return res.status(500).json({ error: "Failed to seed students", details: error.message });
+  }
+});
+
 // tRPC API
 app.use(
   "/api/trpc",
