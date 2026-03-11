@@ -72,7 +72,7 @@ export default function Students() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) { toast.error("يرجى إدخال اسم الطالب"); return; }
-    const barcodeNumber = String(Date.now()).slice(-8);
+    const barcodeNumber = Math.floor(1000 + Math.random() * 999000).toString();
     createStudentMutation.mutate({
       name: formData.name,
       barcodeNumber,
@@ -145,6 +145,25 @@ export default function Students() {
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-card, .print-card * { visibility: visible; }
+          .print-card { 
+            position: absolute; 
+            left: 50%; 
+            top: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 100%; 
+            max-width: 400px;
+            padding: 20px; 
+            margin: 0; 
+            border: none; 
+            box-shadow: none; 
+          }
+          .no-print { display: none !important; }
+        }
+      `}</style>
       <Sidebar userName={user?.name || ""} />
 
       <div className="md:mr-64">
@@ -331,7 +350,7 @@ export default function Students() {
       {/* Student Card Modal */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-sm w-full">
+          <Card className="max-w-sm w-full print-card">
             <div className="p-6">
               <div className="text-center mb-5">
                 <img src="/logo.jpg" alt="logo" className="h-14 w-14 rounded-lg mx-auto mb-3 border border-border" onError={(e: any) => e.target.style.display = "none"} />
@@ -353,7 +372,7 @@ export default function Students() {
                   <BarcodeDisplay value={selectedStudent.barcodeNumber} format="CODE128" width={2} height={70} displayValue={true} />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 no-print">
                 <Button onClick={() => window.print()} className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg">
                   <Printer size={16} className="ml-2" /> طباعة
                 </Button>
