@@ -74,20 +74,31 @@ app.get("/api/seed", async (req, res) => {
 
     console.log("Seeding groups & students via API...");
     let groupsCount = 0;
+    const insertedGroupIds: number[] = [];
+
+    // Delete existing to allow running the API multiple times safely if requested (optional)
+    // await db.delete(students);
+    // await db.delete(studyGroups);
+
     for (const group of groupsList) {
-      await db.insert(studyGroups).values(group);
+      const [insertResult] = await db.insert(studyGroups).values(group);
+      insertedGroupIds.push(insertResult.insertId);
       groupsCount++;
     }
 
     let studentsCount = 0;
-    for (const student of studentsList) {
+    for (let i = 0; i < studentsList.length; i++) {
+      const student = studentsList[i];
+      // Distribute the 14 students evenly among the 3 groups
+      const groupId = insertedGroupIds[i % insertedGroupIds.length]; 
+      
       const barcodeNumber = `STU${Date.now()}${Math.floor(Math.random() * 1000)}`;
       await db.insert(students).values({
         name: student.name,
         parentPhone: student.parentPhone,
         barcodeNumber,
         status: "active",
-        groupId: 1, // default group
+        groupId: groupId,
       });
       studentsCount++;
     }
