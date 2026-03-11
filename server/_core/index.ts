@@ -43,11 +43,17 @@ registerChatRoutes(app);
 app.get("/api/seed", async (req, res) => {
   try {
     const { getDb } = await import("../db");
-    const { students } = await import("../../drizzle/schema");
+    const { students, studyGroups } = await import("../../drizzle/schema");
     const db = await getDb();
     if (!db) {
       return res.status(500).json({ error: "No database connection available" });
     }
+
+    const groupsList = [
+      { name: "مجموعة السبت والثلاثاء 4 عصراً", grade: "الصف الأول الثانوي", schedule: "السبت والثلاثاء 4:00 م" },
+      { name: "مجموعة الأحد والأربعاء 6 مساءً", grade: "الصف الثاني الثانوي", schedule: "الأحد والأربعاء 6:00 م" },
+      { name: "مجموعة الإثنين والخميس 5 عصراً", grade: "الصف الثالث الثانوي", schedule: "الإثنين والخميس 5:00 م" },
+    ];
 
     const studentsList = [
       { name: "محمود أحمد صالح", parentPhone: "01092770125" },
@@ -66,8 +72,14 @@ app.get("/api/seed", async (req, res) => {
       { name: "مصطفى المرزوقي", parentPhone: "01022228059" },
     ];
 
-    console.log("Seeding students via API...");
-    let addedCount = 0;
+    console.log("Seeding groups & students via API...");
+    let groupsCount = 0;
+    for (const group of groupsList) {
+      await db.insert(studyGroups).values(group);
+      groupsCount++;
+    }
+
+    let studentsCount = 0;
     for (const student of studentsList) {
       const barcodeNumber = `STU${Date.now()}${Math.floor(Math.random() * 1000)}`;
       await db.insert(students).values({
@@ -75,13 +87,14 @@ app.get("/api/seed", async (req, res) => {
         parentPhone: student.parentPhone,
         barcodeNumber,
         status: "active",
+        groupId: 1, // default group
       });
-      addedCount++;
+      studentsCount++;
     }
-    return res.json({ success: true, message: `Seeded ${addedCount} students successfully` });
+    return res.json({ success: true, message: `Seeded ${groupsCount} groups and ${studentsCount} students successfully` });
   } catch (error: any) {
     console.error("Seed error:", error);
-    return res.status(500).json({ error: "Failed to seed students", details: error.message });
+    return res.status(500).json({ error: "Failed to seed data", details: error.message });
   }
 });
 
