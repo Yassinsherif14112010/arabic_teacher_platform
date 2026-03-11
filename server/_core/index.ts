@@ -8,6 +8,8 @@ import { registerChatRoutes } from "./chat";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { getDb } from "../db";
+import { students, studyGroups } from "../../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -42,8 +44,6 @@ registerChatRoutes(app);
 // API route to trigger seeding on production
 app.get("/api/seed", async (req, res) => {
   try {
-    const { getDb } = await import("../db");
-    const { students, studyGroups } = await import("../../drizzle/schema");
     const db = await getDb();
     if (!db) {
       return res.status(500).json({ error: "No database connection available" });
