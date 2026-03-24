@@ -16,6 +16,7 @@ import {
   getTodayAttendance,
   recordGrade,
   getStudentGrades,
+  getAllGrades,
   recordPayment,
   getStudentPayments,
   getAllPayments,
@@ -417,7 +418,7 @@ restRouter.get(
 );
 
 // ============ Groups Routes ============
-restRouter.get("/groups", async (_req: Request, res: Response) => {
+restRouter.get("/groups", authMiddleware, async (_req: Request, res: Response) => {
   try {
     const data = await getAllStudyGroups();
     return res.json(data);
@@ -426,7 +427,7 @@ restRouter.get("/groups", async (_req: Request, res: Response) => {
   }
 });
 
-restRouter.get("/groups/grade/:grade", async (req: Request, res: Response) => {
+restRouter.get("/groups/grade/:grade", authMiddleware, async (req: Request, res: Response) => {
   try {
     const data = await getStudyGroupsByGrade(req.params.grade);
     return res.json(data);
@@ -542,7 +543,7 @@ restRouter.post(
         await Promise.all([
           getStudents(),
           getTodayAttendance(),
-          getAllPayments(),
+          getAllGrades(),
           getAllPayments(),
           getAllStudyGroups(),
           getAllFeeSettings(),
