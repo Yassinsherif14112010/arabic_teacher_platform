@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
 import { students, studyGroups } from "../../drizzle/schema";
+import { restRouter } from "../rest-api";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -163,6 +164,9 @@ app.get("/api/seed", async (req, res) => {
     return res.status(500).json({ error: "Failed to seed data", details: error.message });
   }
 });
+
+// REST API for Flutter mobile app
+app.use("/api/rest", restRouter);
 
 // tRPC API
 app.use(
