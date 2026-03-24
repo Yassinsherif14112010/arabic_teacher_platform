@@ -164,6 +164,10 @@ app.get("/api/seed", async (req, res) => {
   }
 });
 
+// REST API for Flutter mobile app
+import { restRouter } from "../rest-api";
+app.use("/api/rest", restRouter);
+
 // tRPC API
 app.use(
   "/api/trpc",
